@@ -216,7 +216,9 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <img className="brand-logo" src="/potatomato-logo.png" alt="potatomato" />
+          <span className="brand-mark">
+            <img className="brand-logo" src="/potatomato-icon.png" alt="potatomato" />
+          </span>
           <span>Potatomato Speaking Coach</span>
         </div>
         <div className="status-pill">
