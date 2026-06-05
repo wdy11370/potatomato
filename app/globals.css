@@ -1,14 +1,17 @@
 :root {
   color-scheme: light;
-  --ink: #1d2528;
-  --muted: #617075;
-  --line: #dce3e0;
-  --paper: #f8faf6;
+  --ink: #2d2925;
+  --muted: #766c62;
+  --line: #e2d8cc;
+  --paper: #faf8f2;
   --panel: #ffffff;
-  --teal: #0f766e;
-  --coral: #d95f43;
-  --gold: #bd8b13;
-  --mint: #dff3ea;
+  --teal: #567d2d;
+  --coral: #cf4d38;
+  --gold: #d89d2f;
+  --mint: #f3ead4;
+  --leaf: #7a943a;
+  --tomato-soft: #f8ded8;
+  --potato-soft: #fff0c9;
 }
 
 * {
@@ -19,7 +22,9 @@ html,
 body {
   margin: 0;
   min-height: 100%;
-  background: var(--paper);
+  background:
+    linear-gradient(180deg, rgba(255, 240, 201, 0.34), rgba(250, 248, 242, 0.72) 210px),
+    var(--paper);
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -48,7 +53,7 @@ button {
   gap: 20px;
   padding: 18px 28px;
   border-bottom: 1px solid var(--line);
-  background: rgba(248, 250, 246, 0.94);
+  background: rgba(250, 248, 242, 0.94);
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
@@ -58,18 +63,15 @@ button {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   font-weight: 760;
 }
 
-.brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: white;
-  background: var(--teal);
+.brand-logo {
+  width: 78px;
+  height: 54px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 12px rgba(94, 53, 20, 0.11));
 }
 
 .status-pill {
@@ -80,7 +82,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 0 12px;
-  background: white;
+  background: rgba(255, 255, 255, 0.76);
   color: var(--muted);
   font-size: 13px;
 }
@@ -98,6 +100,7 @@ button {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(72, 47, 29, 0.05);
   min-width: 0;
 }
 
@@ -133,7 +136,7 @@ button {
   min-height: 86px;
   text-align: left;
   border: 1px solid var(--line);
-  background: #fff;
+  background: #fffdf8;
   border-radius: 8px;
   padding: 14px;
   display: grid;
@@ -141,8 +144,8 @@ button {
 }
 
 .scenario-button.active {
-  border-color: var(--teal);
-  background: var(--mint);
+  border-color: rgba(207, 77, 56, 0.48);
+  background: linear-gradient(135deg, var(--potato-soft), var(--tomato-soft));
 }
 
 .scenario-name {
@@ -182,8 +185,8 @@ button {
 }
 
 .primary-button {
-  background: var(--teal);
-  border-color: var(--teal);
+  background: #a94735;
+  border-color: #a94735;
   color: white;
 }
 
@@ -218,12 +221,14 @@ button {
 
 .turn.ai {
   justify-self: start;
-  border-left: 4px solid var(--teal);
+  border-left: 4px solid var(--leaf);
+  background: #fffef9;
 }
 
 .turn.user {
   justify-self: end;
   border-right: 4px solid var(--coral);
+  background: #fffafa;
 }
 
 .turn-role {
@@ -256,7 +261,7 @@ button {
   border-radius: 8px;
   border: 1px solid var(--line);
   padding: 0 12px;
-  background: white;
+  background: #fffdf8;
 }
 
 .meter {
@@ -270,7 +275,7 @@ button {
   display: block;
   height: 100%;
   width: var(--value, 0%);
-  background: var(--teal);
+  background: linear-gradient(90deg, var(--leaf), var(--gold), var(--coral));
 }
 
 .feedback-list {
@@ -282,7 +287,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 12px;
-  background: #fff;
+  background: #fffdf9;
 }
 
 .feedback-label {
@@ -308,7 +313,7 @@ button {
 .score-value {
   font-size: 24px;
   font-weight: 780;
-  color: var(--teal);
+  color: #8f3f30;
 }
 
 .score-label {

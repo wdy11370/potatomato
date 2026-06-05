@@ -10,7 +10,6 @@ import {
   Play,
   RefreshCcw,
   Send,
-  Sparkles,
   Volume2
 } from "lucide-react";
 import { getScenario, scenarioIconMap, scenarios, ScenarioId } from "@/lib/scenarios";
@@ -217,10 +216,8 @@ export default function Home() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">
-            <Sparkles size={19} />
-          </span>
-          <span>AI English Speaking Coach</span>
+          <img className="brand-logo" src="/potatomato-logo.png" alt="potatomato" />
+          <span>Potatomato Speaking Coach</span>
         </div>
         <div className="status-pill">
           <Bot size={15} />
