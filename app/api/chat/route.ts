@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSystemPrompt, mockReply, Turn } from "@/lib/mockCoach";
 import { getScenario, ScenarioId } from "@/lib/scenarios";
+import { callTextModel } from "@/lib/textModel";
 
 const requestSchema = z.object({
   scenarioId: z.enum(["interview", "restaurant", "meeting"]),
@@ -20,12 +21,6 @@ export async function POST(request: Request) {
   const scenario = getScenario(body.scenarioId);
   const latestUser = [...body.turns].reverse().find((turn) => turn.speaker === "user");
 
-  if (!process.env.OPENAI_API_KEY) {
-    return NextResponse.json({
-      text: mockReply(body.scenarioId as ScenarioId, latestUser?.text ?? "", body.turns.length)
-    });
-  }
-
   const messages = [
     { role: "system" as const, content: createSystemPrompt(scenario) },
     ...body.turns.slice(-10).map((turn: Turn) => ({
@@ -34,23 +29,8 @@ export async function POST(request: Request) {
     }))
   ];
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_TEXT_MODEL ?? "gpt-4o-mini",
-      messages,
-      temperature: 0.7
-    })
+  const content = await callTextModel(messages, { temperature: 0.7 });
+  return NextResponse.json({
+    text: content ?? mockReply(body.scenarioId as ScenarioId, latestUser?.text ?? "", body.turns.length)
   });
-
-  if (!response.ok) {
-    return NextResponse.json({ text: mockReply(body.scenarioId as ScenarioId, latestUser?.text ?? "", body.turns.length) });
-  }
-
-  const json = await response.json();
-  return NextResponse.json({ text: json.choices?.[0]?.message?.content ?? scenario.firstLine });
 }
