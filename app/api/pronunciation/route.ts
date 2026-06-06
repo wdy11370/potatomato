@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAudioExtension, transcodeToAzureWav } from "@/lib/audioTranscode";
 import { assessPronunciationWithAzure, summarizePronunciationResult } from "@/lib/azurePronunciation";
 
 export const runtime = "nodejs";
@@ -8,7 +9,6 @@ export async function POST(request: Request) {
   const text = String(form.get("text") ?? "");
   const audio = form.get("audio");
   const audioSize = audio instanceof File ? audio.size : 0;
-  const audioType = audio instanceof File ? audio.type : "";
   const hasAzure = Boolean(process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION);
 
   if (!hasAzure) {
@@ -19,8 +19,8 @@ export async function POST(request: Request) {
       fluencyScore: 78,
       prosodyScore: 70,
       note: text
-        ? `演示评分：已收到文本 "${text.slice(0, 60)}"${audioSize ? ` 和 ${Math.round(audioSize / 1024)}KB 音频` : ""}。配置 Azure Speech 后可返回单词级/音素级评分。`
-        : "演示评分：配置 Azure Speech 后可返回单词级/音素级评分。"
+        ? `演示评分：已收到文本 "${text.slice(0, 60)}"${audioSize ? ` 和 ${Math.round(audioSize / 1024)}KB 音频` : ""}。配置 Azure Speech 后会自动转码并返回单词级/音素级评分。`
+        : "演示评分：配置 Azure Speech 后会自动转码并返回单词级/音素级评分。"
     });
   }
 
@@ -44,17 +44,20 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!audioType.includes("wav") && !audio.name.toLowerCase().endsWith(".wav")) {
-    return NextResponse.json({
-      mode: "configured",
-      note: `Azure Speech key 已配置，收到 ${audioType || "unknown"} 音频 ${Math.round(audioSize / 1024)}KB。当前后端评测需要 WAV/PCM；请先把浏览器 webm 转成 wav 再调用。`
-    });
-  }
-
   try {
-    const wavBuffer = Buffer.from(await audio.arrayBuffer());
+    const inputBuffer = Buffer.from(await audio.arrayBuffer());
+    const isWav = audio.type.includes("wav") || audio.name.toLowerCase().endsWith(".wav");
+    const wavBuffer = isWav ? inputBuffer : await transcodeToAzureWav(inputBuffer, getAudioExtension(audio));
     const rawResult = await assessPronunciationWithAzure(wavBuffer, text);
-    return NextResponse.json(summarizePronunciationResult(rawResult));
+
+    return NextResponse.json({
+      ...summarizePronunciationResult(rawResult),
+      transcode: {
+        inputType: audio.type || "unknown",
+        inputSizeKb: Math.round(audio.size / 1024),
+        output: isWav ? "original wav" : "converted wav 16kHz mono PCM"
+      }
+    });
   } catch (error) {
     return NextResponse.json(
       {
