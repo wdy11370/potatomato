@@ -16,6 +16,11 @@ const feedbackSchema = z.object({
 
 export async function POST(request: Request) {
   const body = requestSchema.parse(await request.json());
+  const ruleFeedback = mockFeedback(body.text);
+
+  if (process.env.USE_LLM_FEEDBACK !== "true") {
+    return NextResponse.json(ruleFeedback);
+  }
 
   try {
     const content = await callTextModel(
@@ -35,7 +40,7 @@ export async function POST(request: Request) {
     // Fall through to deterministic demo feedback.
   }
 
-  return NextResponse.json(mockFeedback(body.text));
+  return NextResponse.json(ruleFeedback);
 }
 
 function normalizeFeedback(value: unknown, originalText: string) {

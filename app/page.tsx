@@ -180,7 +180,17 @@ export default function Home() {
     setFeedback(null);
     setIsThinking(true);
 
-    await Promise.all([requestFeedback(text), requestPronunciation(text)]);
+    requestFeedback(text).catch(() => {
+      setFeedback({
+        corrected: text,
+        issue: "暂时无法获取表达反馈。",
+        better: "请稍后重试，或先继续完成对话。",
+        pronunciationHint: "发音评测稍后再试。"
+      });
+    });
+    requestPronunciation(text).catch(() => {
+      setPronunciationNote("发音评测暂时不可用，请稍后重试。");
+    });
 
     const response = await fetch("/api/chat", {
       method: "POST",

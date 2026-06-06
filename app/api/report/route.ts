@@ -28,6 +28,11 @@ const reportSchema = z.object({
 
 export async function POST(request: Request) {
   const body = requestSchema.parse(await request.json());
+  const ruleReport = mockReport(body.turns);
+
+  if (process.env.USE_LLM_REPORT !== "true") {
+    return NextResponse.json(ruleReport);
+  }
 
   try {
     const content = await callTextModel(
@@ -50,5 +55,5 @@ export async function POST(request: Request) {
     // Fall through to deterministic demo report.
   }
 
-  return NextResponse.json(mockReport(body.turns));
+  return NextResponse.json(ruleReport);
 }
