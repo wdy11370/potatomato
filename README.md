@@ -34,15 +34,6 @@ http://localhost:3000
 - `public/potatomato-icon.png`
 - `.env.example`
 
-不需要上传或提交这些目录：
-
-- `node_modules/`
-- `.next/`
-- `.env`
-- `.env.local`
-- `Cognitive-Speech-TTS/`
-- `SpeechSDK-JavaScript-*.zip`
-
 下载后执行 `npm install` 会自动安装依赖，包括：
 
 - Next.js / React
@@ -135,18 +126,6 @@ Browser
   -> /api/pronunciation: webm 转 wav + Azure 发音评测
   -> /api/report: 课后报告
 ```
-
-## 推荐演示方式
-
-1. 选择“英文面试”。
-2. 输入一个过短回答，例如 `1`，查看系统如何提示无效输入。
-3. 输入完整回答，例如：
-
-```text
-I managed a customer engagement campaign and increased user participation by 30%.
-```
-
-4. 查看 AI 追问、即时纠错和课后报告。
 
 ## Agent Workflow
 
