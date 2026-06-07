@@ -147,3 +147,45 @@ I managed a customer engagement campaign and increased user participation by 30%
 ```
 
 4. 查看 AI 追问、即时纠错和课后报告。
+
+## Agent Workflow
+
+The app now uses a workflow-style speaking-coach agent. The learner still sees one simple speaking practice surface, while the implementation exposes a clear agent boundary for technical review.
+
+Main flow:
+
+```text
+Browser
+  -> /api/agent/turn
+  -> AgentOrchestrator
+  -> dialogue agent
+  -> feedback agent
+  -> pronunciation tool
+  -> Agent Trace
+```
+
+Report flow:
+
+```text
+Browser
+  -> /api/agent/report
+  -> AgentOrchestrator
+  -> report agent
+  -> Agent Trace
+```
+
+Key files:
+
+- `lib/agents/orchestrator.ts`
+- `lib/agents/state.ts`
+- `lib/agents/trace.ts`
+- `lib/agents/dialogueAgent.ts`
+- `lib/agents/feedbackAgent.ts`
+- `lib/agents/reportAgent.ts`
+- `lib/agents/tools/`
+- `app/api/agent/turn/route.ts`
+- `app/api/agent/report/route.ts`
+
+The main learner experience stays simple. For technical demos, open the `Agent Trace` panel to inspect each workflow step, provider selection, fallback behavior, and timing.
+
+See `docs/agent-architecture.md` for the module map and demo explanation.

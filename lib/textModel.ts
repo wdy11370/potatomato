@@ -1,18 +1,36 @@
-type ChatMessage = {
+export type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
 
-type TextModelOptions = {
+export type TextModelOptions = {
   json?: boolean;
   temperature?: number;
 };
 
-export async function callTextModel(messages: ChatMessage[], options: TextModelOptions = {}) {
-  const openAIResult = await callOpenAIText(messages, options).catch(() => null);
-  if (openAIResult) return openAIResult;
+export type TextModelProvider = "openai" | "ollama";
 
-  return callOllamaText(messages, options).catch(() => null);
+export type TextModelResult = {
+  content: string;
+  provider: TextModelProvider;
+};
+
+export async function callTextModel(messages: ChatMessage[], options: TextModelOptions = {}) {
+  const result = await callTextModelWithProvider(messages, options);
+  return result?.content ?? null;
+}
+
+export async function callTextModelWithProvider(
+  messages: ChatMessage[],
+  options: TextModelOptions = {}
+): Promise<TextModelResult | null> {
+  const openAIResult = await callOpenAIText(messages, options).catch(() => null);
+  if (openAIResult) return { content: openAIResult, provider: "openai" };
+
+  const ollamaResult = await callOllamaText(messages, options).catch(() => null);
+  if (ollamaResult) return { content: ollamaResult, provider: "ollama" };
+
+  return null;
 }
 
 async function callOpenAIText(messages: ChatMessage[], options: TextModelOptions) {

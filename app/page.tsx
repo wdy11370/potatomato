@@ -26,6 +26,36 @@ type SpeechRecognitionLike = {
   onerror: (() => void) | null;
 };
 
+type TraceEvent = {
+  id: string;
+  step: string;
+  status: "success" | "fallback" | "skipped" | "error";
+  startedAt: string;
+  durationMs: number;
+  provider?: string;
+  inputSummary?: string;
+  outputSummary?: string;
+  errorMessage?: string;
+};
+
+type AgentTurnResponse = {
+  sessionId: string;
+  aiTurn: Turn;
+  updatedTurns: Turn[];
+  feedback: Feedback;
+  pronunciation?: {
+    note: string;
+    pronScore?: number | null;
+  };
+  stateSummary: {
+    validUserTurns: number;
+    invalidUserTurns: number;
+    averageWordsPerUserTurn: number;
+    repeatedIssues: string[];
+  };
+  trace?: TraceEvent[];
+};
+
 declare global {
   interface Window {
     SpeechRecognition?: new () => SpeechRecognitionLike;
@@ -47,10 +77,15 @@ export default function Home() {
   const [draft, setDraft] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [report, setReport] = useState<Report | null>(null);
+  const [reportError, setReportError] = useState("");
   const [pronunciationNote, setPronunciationNote] = useState("");
   const [connectionMode, setConnectionMode] = useState("演示模式");
+  const [sessionId, setSessionId] = useState("");
+  const [showTrace, setShowTrace] = useState(false);
+  const [agentTrace, setAgentTrace] = useState<TraceEvent[]>([]);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -65,8 +100,13 @@ export default function Home() {
     setTurns([makeTurn("ai", scenario.firstLine)]);
     setFeedback(null);
     setReport(null);
+    setReportError("");
     setDraft("");
     setPronunciationNote("");
+    setSessionId("");
+    setAgentTrace([]);
+    setShowTrace(false);
+    latestAudioRef.current = null;
   }, [scenario]);
 
   async function probeRealtime() {
@@ -149,25 +189,6 @@ export default function Home() {
     setIsListening(false);
   }
 
-  async function requestFeedback(text: string) {
-    const response = await fetch("/api/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
-    });
-    const data = (await response.json()) as Feedback;
-    setFeedback(data);
-  }
-
-  async function requestPronunciation(text: string) {
-    const form = new FormData();
-    form.append("text", text);
-    if (latestAudioRef.current) form.append("audio", latestAudioRef.current, "answer.webm");
-    const response = await fetch("/api/pronunciation", { method: "POST", body: form });
-    const data = await response.json();
-    setPronunciationNote(data.note ?? `Pronunciation score: ${data.pronScore ?? "--"}`);
-  }
-
   async function handleSubmit(event?: FormEvent) {
     event?.preventDefault();
     const text = draft.trim();
@@ -178,48 +199,81 @@ export default function Home() {
     setTurns(nextTurns);
     setDraft("");
     setFeedback(null);
+    setReportError("");
     setIsThinking(true);
+    setAgentTrace([]);
 
-    requestFeedback(text).catch(() => {
+    try {
+      const form = new FormData();
+      if (sessionId) form.append("sessionId", sessionId);
+      form.append("scenarioId", scenarioId);
+      form.append("turns", JSON.stringify(nextTurns));
+      form.append("text", text);
+      form.append("includeTrace", "true");
+      if (latestAudioRef.current) form.append("audio", latestAudioRef.current, "answer.webm");
+      latestAudioRef.current = null;
+
+      const response = await fetch("/api/agent/turn", { method: "POST", body: form });
+      if (!response.ok) throw new Error("Agent turn failed.");
+      const data = (await response.json()) as AgentTurnResponse;
+
+      setSessionId(data.sessionId);
+      setFeedback(data.feedback);
+      setPronunciationNote(data.pronunciation?.note ?? `Pronunciation score: ${data.pronunciation?.pronScore ?? "--"}`);
+      setAgentTrace(data.trace ?? []);
+      setTurns(data.updatedTurns ?? [...nextTurns, data.aiTurn]);
+      setIsThinking(false);
+      speak(data.aiTurn.text);
+      return;
+    } catch {
       setFeedback({
         corrected: text,
-        issue: "暂时无法获取表达反馈。",
-        better: "请稍后重试，或先继续完成对话。",
-        pronunciationHint: "发音评测稍后再试。"
+        issue: "Agent feedback is temporarily unavailable.",
+        better: "Please try again later or continue the conversation.",
+        pronunciationHint: "Pronunciation assessment can be retried later."
       });
-    });
-    requestPronunciation(text).catch(() => {
-      setPronunciationNote("发音评测暂时不可用，请稍后重试。");
-    });
+      setPronunciationNote("Agent API is temporarily unavailable. Please try again.");
+      setIsThinking(false);
+      return;
+    }
 
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scenarioId, turns: nextTurns })
-    });
-    const data = await response.json();
-    const aiTurn = makeTurn("ai", data.text);
-    setTurns((current) => [...current, aiTurn]);
-    setIsThinking(false);
-    speak(data.text);
   }
 
   async function finishSession() {
-    const response = await fetch("/api/report", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ turns })
-    });
-    const data = (await response.json()) as Report;
-    setReport(data);
+    if (isReporting) return;
+
+    setIsReporting(true);
+    setReportError("");
+
+    try {
+      const response = await fetch("/api/agent/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, scenarioId, turns, includeTrace: true })
+      });
+      if (!response.ok) throw new Error("Agent report failed.");
+
+      const data = (await response.json()) as { report: Report; trace?: TraceEvent[] };
+      setReport(data.report);
+      if (data.trace) setAgentTrace(data.trace);
+    } catch {
+      setReportError("Agent report is temporarily unavailable. Please try again.");
+    } finally {
+      setIsReporting(false);
+    }
   }
 
   function resetSession() {
     setTurns([makeTurn("ai", scenario.firstLine)]);
     setFeedback(null);
     setReport(null);
+    setReportError("");
     setDraft("");
     setPronunciationNote("");
+    setSessionId("");
+    setAgentTrace([]);
+    setShowTrace(false);
+    latestAudioRef.current = null;
   }
 
   return (
@@ -288,9 +342,9 @@ export default function Home() {
                 <Volume2 size={17} />
                 播放
               </button>
-              <button className="secondary-button" onClick={finishSession} type="button">
-                <FileText size={17} />
-                生成报告
+              <button className="secondary-button" disabled={isReporting} onClick={finishSession} type="button">
+                {isReporting ? <Loader2 size={17} className="spin" /> : <FileText size={17} />}
+                {isReporting ? "生成中" : "生成报告"}
               </button>
               <button className="secondary-button" onClick={resetSession} type="button">
                 <RefreshCcw size={17} />
@@ -369,6 +423,32 @@ export default function Home() {
                 <div className="feedback-label">发音评测接口</div>
                 <div className="small-note">{pronunciationNote || "等待用户回答。配置 Azure 后可输出音素级评分。"}</div>
               </div>
+              <div className="feedback-item trace-card">
+                <button className="trace-toggle" onClick={() => setShowTrace((current) => !current)} type="button">
+                  Agent Trace
+                  <span>{showTrace ? "Hide" : "Show"}</span>
+                </button>
+                {showTrace ? (
+                  <div className="trace-list">
+                    {agentTrace.length ? (
+                      agentTrace.map((event) => (
+                        <div className={`trace-row ${event.status}`} key={event.id}>
+                          <div className="trace-main">
+                            <span className="trace-step">{event.step}</span>
+                            <span className="trace-meta">
+                              {event.status} · {event.provider ?? "system"} · {event.durationMs}ms
+                            </span>
+                          </div>
+                          {event.outputSummary ? <div className="small-note">{event.outputSummary}</div> : null}
+                          {event.errorMessage ? <div className="small-note">{event.errorMessage}</div> : null}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="small-note">Send a turn to inspect the agent workflow.</div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             {report ? (
@@ -387,9 +467,10 @@ export default function Home() {
               </section>
             ) : (
               <section className="report">
-                <button className="primary-button" onClick={finishSession} type="button">
-                  <Play size={17} />
-                  结束并生成报告
+                {reportError ? <p className="small-note">{reportError}</p> : null}
+                <button className="primary-button" disabled={isReporting} onClick={finishSession} type="button">
+                  {isReporting ? <Loader2 size={17} className="spin" /> : <Play size={17} />}
+                  {isReporting ? "生成中" : "结束并生成报告"}
                 </button>
               </section>
             )}

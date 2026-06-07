@@ -344,6 +344,71 @@ button {
   line-height: 1.45;
 }
 
+.trace-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.trace-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.trace-toggle span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.trace-list {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.trace-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.trace-row.fallback {
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.trace-row.error {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.trace-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.trace-step {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trace-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .spin {
   animation: spin 0.9s linear infinite;
   vertical-align: -3px;
