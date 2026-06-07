@@ -8,7 +8,7 @@ export type TextModelOptions = {
   temperature?: number;
 };
 
-export type TextModelProvider = "openai" | "ollama";
+export type TextModelProvider = "deepseek" | "openai" | "ollama";
 
 export type TextModelResult = {
   content: string;
@@ -24,6 +24,26 @@ export async function callTextModelWithProvider(
   messages: ChatMessage[],
   options: TextModelOptions = {}
 ): Promise<TextModelResult | null> {
+  const provider = process.env.TEXT_PROVIDER;
+
+  if (provider === "deepseek") {
+    const deepSeekResult = await callDeepSeekText(messages, options).catch(() => null);
+    if (deepSeekResult) return { content: deepSeekResult, provider: "deepseek" };
+  }
+
+  if (provider === "ollama") {
+    const ollamaResult = await callOllamaText(messages, options).catch(() => null);
+    if (ollamaResult) return { content: ollamaResult, provider: "ollama" };
+  }
+
+  if (provider === "openai") {
+    const openAIResult = await callOpenAIText(messages, options).catch(() => null);
+    if (openAIResult) return { content: openAIResult, provider: "openai" };
+  }
+
+  const deepSeekResult = await callDeepSeekText(messages, options).catch(() => null);
+  if (deepSeekResult) return { content: deepSeekResult, provider: "deepseek" };
+
   const openAIResult = await callOpenAIText(messages, options).catch(() => null);
   if (openAIResult) return { content: openAIResult, provider: "openai" };
 
@@ -31,6 +51,34 @@ export async function callTextModelWithProvider(
   if (ollamaResult) return { content: ollamaResult, provider: "ollama" };
 
   return null;
+}
+
+async function callDeepSeekText(messages: ChatMessage[], options: TextModelOptions) {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return null;
+
+  const response = await fetch(process.env.DEEPSEEK_API_URL ?? "https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
+      messages,
+      temperature: options.temperature ?? 0.45,
+      stream: false,
+      ...(options.json ? { response_format: { type: "json_object" } } : {})
+    }),
+    signal: AbortSignal.timeout(45000)
+  });
+
+  if (!response.ok) {
+    throw new Error(`DeepSeek text call failed: ${response.status} ${await response.text()}`);
+  }
+
+  const json = await response.json();
+  return json.choices?.[0]?.message?.content as string | undefined;
 }
 
 async function callOpenAIText(messages: ChatMessage[], options: TextModelOptions) {

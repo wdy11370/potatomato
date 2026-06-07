@@ -119,7 +119,12 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResu
       return {
         value,
         status: pronunciationTraceStatus(value.mode),
-        provider: value.mode === "azure" || value.mode === "azure-error" ? ("azure" as const) : undefined,
+        provider:
+          value.mode === "azure" || value.mode === "azure-error"
+            ? ("azure" as const)
+            : value.mode === "iflytek" || value.mode === "iflytek-error"
+              ? ("iflytek" as const)
+              : undefined,
         outputSummary: summarizeText(value.note)
       };
     },
@@ -235,6 +240,6 @@ function getWords(text: string) {
 }
 
 function pronunciationTraceStatus(mode: string) {
-  if (mode === "azure-error" || mode === "mock" || mode === "configured" || mode === "skipped") return "fallback" as const;
+  if (mode === "azure-error" || mode === "iflytek-error" || mode === "mock" || mode === "configured" || mode === "skipped") return "fallback" as const;
   return "success" as const;
 }

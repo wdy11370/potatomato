@@ -41,6 +41,40 @@ export async function transcodeToAzureWav(inputBuffer: Buffer, extension = "webm
   }
 }
 
+export async function transcodeToPcm16k(inputBuffer: Buffer, extension = "webm") {
+  if (!ffmpegPath) {
+    throw new Error("ffmpeg-static is not available.");
+  }
+
+  const workDir = path.join(tmpdir(), `${AUDIO_TMP_PREFIX}${randomUUID()}`);
+  await mkdir(workDir, { recursive: true });
+
+  const safeExtension = extension.replace(/[^a-z0-9]/gi, "").toLowerCase() || "webm";
+  const inputPath = path.join(workDir, `input.${safeExtension}`);
+  const outputPath = path.join(workDir, "output.pcm");
+
+  try {
+    await writeFile(inputPath, inputBuffer);
+    await runFfmpeg([
+      "-y",
+      "-i",
+      inputPath,
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
+      "-sample_fmt",
+      "s16",
+      "-f",
+      "s16le",
+      outputPath
+    ]);
+    return await readFile(outputPath);
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
 function runFfmpeg(args: string[]) {
   return new Promise<void>((resolve, reject) => {
     execFile(ffmpegPath as string, args, (error, _stdout, stderr) => {

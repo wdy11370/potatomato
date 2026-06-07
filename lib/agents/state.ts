@@ -3,7 +3,7 @@ import type { ScenarioId } from "@/lib/scenarios";
 
 export type AgentMode = "demo" | "llm" | "hybrid";
 
-export type AgentProvider = "rules" | "openai" | "ollama" | "azure";
+export type AgentProvider = "rules" | "deepseek" | "openai" | "ollama" | "azure" | "iflytek";
 
 export type AgentStep =
   | "input.validation"
@@ -45,7 +45,7 @@ export type AgentMetrics = {
 };
 
 export type PronunciationSummary = {
-  mode: "mock" | "configured" | "azure" | "azure-error" | "skipped";
+  mode: "mock" | "configured" | "azure" | "azure-error" | "iflytek" | "iflytek-error" | "skipped";
   pronScore?: number | null;
   accuracyScore?: number | null;
   fluencyScore?: number | null;
