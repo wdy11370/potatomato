@@ -1,59 +1,129 @@
 # Potatomato Speaking Coach
 
-一个可本地运行的 AI 英语口语陪练网页应用。支持场景选择、英文输入/语音输入、AI 场景对话、即时表达纠错、发音评测接口和课后报告。
+Potatomato Speaking Coach 是一个可本地部署的 AI 英语口语练习网页应用。用户选择训练场景后，直接点击录音说英文，系统会保存录音、自动转写、调用 AI 生成下一轮对话，并在会话结束后生成纠错反馈和训练报告。
 
-项目默认不需要任何 API Key 也能启动运行：聊天、纠错和报告会使用本地规则教练引擎。配置 OpenAI、Ollama 或 Azure 后，可以切换到真实模型/真实发音评测。
+当前版本面向可演示、可二次开发、可私有部署的口语训练流程，重点不是做一个通用聊天机器人，而是围绕“场景化口语练习”形成完整链路。
 
-## 快速启动
+## 功能
 
-```bash
+- 场景化口语训练：英文面试、餐厅点餐、商务会议等。
+- 语音输入：浏览器录音，服务端接收音频。
+- 自动转写：优先使用浏览器语音识别，失败时调用讯飞 ASR。
+- AI 对话：保留每个场景的第一句开场，后续回复由 DeepSeek 生成。
+- 即时反馈：对用户每轮英文回答进行语法、表达、场景适配度分析。
+- 发音评测：支持讯飞语音评测接口，也保留 Azure Speech 接口。
+- 课后报告：根据真实对话记录生成总结，不使用预设假报告。
+- 多条存档：浏览器本地保存多条练习记录，刷新页面后仍可查看。
+- 本地部署：API Key 写入 `.env.local`，不会上传到 GitHub。
+
+## 技术栈
+
+- Next.js 15
+- React 19
+- TypeScript
+- DeepSeek Chat API
+- 讯飞 ASR / 讯飞语音评测
+- MediaRecorder
+- Web Speech API
+- FFmpeg 音频转码
+- localStorage 会话存档
+
+## 项目结构
+
+```text
+app/
+  api/
+    agent/turn/       AI 对话、即时反馈、发音评测编排接口
+    agent/report/     课后报告接口
+    asr/              讯飞 ASR 转写接口
+    chat/             兼容旧版聊天接口
+    feedback/         兼容旧版反馈接口
+    pronunciation/    发音评测接口
+    report/           兼容旧版报告接口
+  page.tsx            主页面
+  globals.css         页面样式
+
+lib/
+  agents/             口语训练 Agent 编排
+  iflytekAsr.ts       讯飞 ASR WebSocket 调用
+  iflytekPronunciation.ts 讯飞语音评测调用
+  azurePronunciation.ts   Azure 发音评测调用
+  audioTranscode.ts   音频转码
+  textModel.ts        DeepSeek / OpenAI / Ollama 文本模型调用
+  scenarios.ts        训练场景配置
+
+public/
+  potatomato-icon.png 品牌图标
+```
+
+## 快速运行
+
+先进入项目目录：
+
+```powershell
+cd C:\Users\admin\Desktop\临床数据agent\branch1\potatomato
+```
+
+安装依赖：
+
+```powershell
 npm install
+```
+
+复制环境变量模板：
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+启动开发服务器：
+
+```powershell
 npm run dev
+```
+
+如果 3000 端口被占用，可以指定端口：
+
+```powershell
+npm run dev -- -p 3004
 ```
 
 打开：
 
 ```text
-http://127.0.0.1:3000
+http://127.0.0.1:3004/
 ```
 
-也可以使用：
+局域网其他设备访问时，用终端里显示的 Network 地址，例如：
 
 ```text
-http://localhost:3000
+http://10.201.94.116:3004/
 ```
 
-## 从 GitHub 下载后需要什么
-
-仓库已经包含运行所需的源码、图标、配置和依赖声明：
-
-- `package.json`
-- `package-lock.json`
-- `app/`
-- `lib/`
-- `public/potatomato-icon.png`
-- `.env.example`
-
-下载后执行 `npm install` 会自动安装依赖，包括：
-
-- Next.js / React
-- Azure Speech SDK
-- ffmpeg-static
-- lucide-react
-- zod
+注意：非本机设备通过 HTTP 访问时，部分浏览器可能禁止麦克风权限。正式演示建议使用本机 `127.0.0.1`，或部署到 HTTPS 环境。
 
 ## 环境变量
 
-复制 `.env.example` 为 `.env.local`：
+`.env.local` 用来保存真实 API Key，不要提交到 GitHub。仓库只提交 `.env.example` 模板。
 
-```bash
-cp .env.example .env.local
-```
+推荐配置：
 
-Windows PowerShell：
+```env
+TEXT_PROVIDER=deepseek
+DEEPSEEK_API_URL=https://api.deepseek.com/chat/completions
+DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_API_KEY=
 
-```powershell
-Copy-Item .env.example .env.local
+USE_LLM_CHAT=true
+USE_LLM_FEEDBACK=true
+USE_LLM_REPORT=true
+
+PRONUNCIATION_PROVIDER=iflytek
+IFLYTEK_ISE_URL=wss://ise-api.xfyun.cn/v2/open-ise
+IFLYTEK_ASR_URL=wss://iat-api.xfyun.cn/v2/iat
+IFLYTEK_APP_ID=
+IFLYTEK_API_KEY=
+IFLYTEK_API_SECRET=
 ```
 
 可选配置：
@@ -65,106 +135,146 @@ OPENAI_TEXT_MODEL=gpt-4o-mini
 
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:3b
-USE_LLM_CHAT=false
-USE_LLM_FEEDBACK=false
-USE_LLM_REPORT=false
 
 AZURE_SPEECH_KEY=
 AZURE_SPEECH_REGION=
 ```
 
-## 当前默认模式
+## API Key 获取位置
 
-默认模式适合演示和本地测试：
+DeepSeek：
 
-- 聊天：快速规则教练引擎
-- 纠错：规则化表达诊断
-- 报告：基于真实输入统计生成
-- 发音：无 Azure key 时返回演示评分
+1. 进入 DeepSeek 开放平台。
+2. 创建 API Key。
+3. 将 Key 填入 `.env.local` 的 `DEEPSEEK_API_KEY`。
 
-这样做的好处是响应快，不会因为本地小模型慢而长时间 Thinking。
+讯飞：
 
-## 可选：接入 Ollama
+1. 进入讯飞开放平台控制台。
+2. 创建“语音听写”应用，用于 ASR。
+3. 创建或开通“语音评测”能力，用于发音评测。
+4. 在应用详情页找到 `APPID`、`APIKey`、`APISecret`。
+5. 分别填入 `.env.local` 的 `IFLYTEK_APP_ID`、`IFLYTEK_API_KEY`、`IFLYTEK_API_SECRET`。
 
-如果本机有 Ollama，可以设置：
+## 调用链路
 
-```env
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen2.5:3b
-USE_LLM_CHAT=true
-USE_LLM_FEEDBACK=true
-USE_LLM_REPORT=true
+用户录音后的主链路：
+
+```text
+浏览器录音
+  -> MediaRecorder 保存音频
+  -> 浏览器语音识别尝试转写
+  -> 如果转写失败，调用 /api/asr
+  -> /api/asr 调用讯飞 ASR
+  -> /api/agent/turn
+  -> Dialogue Agent 调用 DeepSeek 生成下一轮回复
+  -> Feedback Agent 调用 DeepSeek 生成针对性纠错
+  -> Pronunciation Tool 调用讯飞或 Azure 进行发音评测
+  -> 前端保存音频、文本、反馈和 AI 回复
 ```
 
-建议只在测试模型效果时开启。日常演示建议保持 `false`，速度更稳定。
+生成报告链路：
 
-## 可选：接入 Azure 发音评测
-
-配置：
-
-```env
-AZURE_SPEECH_KEY=your_azure_speech_key
-AZURE_SPEECH_REGION=your_region
+```text
+点击生成报告
+  -> /api/agent/report
+  -> Report Agent 调用 DeepSeek
+  -> 基于真实 turns / feedback / pronunciation 生成课后总结
+  -> 存入本地历史记录
 ```
 
-前端录音默认是 `webm`。后端已经内置 `ffmpeg-static`，会自动转成 Azure 需要的 `16kHz / mono / PCM WAV`，再调用 Azure Pronunciation Assessment。
+## 本地存档
 
-## 构建检查
+应用使用浏览器 `localStorage` 保存历史记录：
 
-```bash
+- 当前会话：`potatomato-speaking-coach-session`
+- 历史记录：`potatomato-speaking-coach-history`
+
+同一浏览器中刷新页面不会丢失记录。换浏览器、清理浏览器缓存或换设备后，本地记录不会自动迁移。
+
+## 常用命令
+
+开发：
+
+```powershell
+npm run dev -- -p 3004
+```
+
+构建检查：
+
+```powershell
 npm run build
 ```
 
-## 功能链路
+生产启动：
 
-```text
-Browser
-  -> Web Speech API / MediaRecorder
-  -> Next.js API Routes
-  -> /api/chat: 场景角色回复
-  -> /api/feedback: 即时表达纠错
-  -> /api/pronunciation: webm 转 wav + Azure 发音评测
-  -> /api/report: 课后报告
+```powershell
+npm run build
+npm run start
 ```
 
-## Agent Workflow
+查看 Git 状态：
 
-The app now uses a workflow-style speaking-coach agent. The learner still sees one simple speaking practice surface, while the implementation exposes a clear agent boundary for technical review.
-
-Main flow:
-
-```text
-Browser
-  -> /api/agent/turn
-  -> AgentOrchestrator
-  -> dialogue agent
-  -> feedback agent
-  -> pronunciation tool
-  -> Agent Trace
+```powershell
+git status --short
 ```
 
-Report flow:
+检查是否误提交密钥：
 
-```text
-Browser
-  -> /api/agent/report
-  -> AgentOrchestrator
-  -> report agent
-  -> Agent Trace
+```powershell
+git diff --cached --name-only
 ```
 
-Key files:
+确认输出里没有 `.env.local`。如果 `.env.local` 出现在暂存区，请先取消暂存，不要提交。
 
-- `lib/agents/orchestrator.ts`
-- `lib/agents/state.ts`
-- `lib/agents/trace.ts`
-- `lib/agents/dialogueAgent.ts`
-- `lib/agents/feedbackAgent.ts`
-- `lib/agents/reportAgent.ts`
-- `lib/agents/tools/`
-- `app/api/agent/turn/route.ts`
-- `app/api/agent/report/route.ts`
+## 上传 GitHub
 
-The main learner experience stays simple. For technical demos, open the `Agent Trace` panel to inspect each workflow step, provider selection, fallback behavior, and timing.
+确认 `.env.local` 没有被暂存：
 
-See `docs/agent-architecture.md` for the module map and demo explanation.
+```powershell
+git status --short
+```
+
+添加文件：
+
+```powershell
+git add .
+```
+
+提交：
+
+```powershell
+git commit -m "Update speaking coach app"
+```
+
+当前本地分支如果叫 `1`，推送到 GitHub 的 `1` 分支：
+
+```powershell
+git push -u origin 1
+```
+
+如果要把本地 `1` 分支推到 GitHub 的 `main` 分支：
+
+```powershell
+git push origin 1:main
+```
+
+## 安全说明
+
+- `.env.local` 已被 `.gitignore` 忽略。
+- 不要把真实 API Key 写进代码、README 或 `.env.example`。
+- GitHub 上只保留环境变量模板。
+- 如果曾经误提交过密钥，请立即到对应平台删除旧 Key 并重新生成。
+
+## 当前模型配置建议
+
+推荐演示组合：
+
+```text
+文本对话 / 纠错 / 报告：DeepSeek
+语音转写：讯飞 ASR
+发音评测：讯飞语音评测
+录音与页面交互：浏览器 MediaRecorder
+```
+
+这样可以替代原来的 OpenAI Realtime 和 Azure Speech 方案，成本更低，也更适合国内网络环境和本地部署演示。
