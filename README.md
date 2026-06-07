@@ -2,7 +2,7 @@
 
 Potatomato Speaking Coach 是一个可本地部署的 AI 英语口语练习网页应用。用户选择训练场景后，直接点击录音说英文，系统会保存录音、自动转写、调用 AI 生成下一轮对话，并在会话结束后生成纠错反馈和训练报告。
 
-当前版本面向可演示、可二次开发、可私有部署的口语训练流程，重点不是做一个通用聊天机器人，而是围绕“场景化口语练习”形成完整链路。
+演示视频链接：【题目一：AI英语口语陪练工具Demo】 https://www.bilibili.com/video/BV1qpEh6YEFP/?share_source=copy_web&vd_source=8475a37a7897505ce8732b4ae306d44f
 
 ## 功能
 
