@@ -172,55 +172,6 @@ DeepSeek：
 
 同一浏览器中刷新页面不会丢失记录。换浏览器、清理浏览器缓存或换设备后，本地记录不会自动迁移。
 
-## 常用命令
-
-开发：
-
-```powershell
-npm run dev
-```
-
-构建检查：
-
-```powershell
-npm run build
-```
-
-生产启动：
-
-```powershell
-npm run build
-npm run start
-```
-
-查看 Git 状态：
-
-```powershell
-git status --short
-```
-
-
-## 上传 GitHub
-
-确认 `.env.local` 没有被暂存：
-
-```powershell
-git status --short
-```
-
-添加文件：
-
-```powershell
-git add .
-```
-
-提交：
-
-```powershell
-git commit -m "Update speaking coach app"
-```
-
-
 ## 当前模型配置建议
 
 推荐演示组合：
