@@ -13,6 +13,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
+      <head>
+        <link rel="stylesheet" href="/potatomato-fallback.css" />
+      </head>
       <body>{children}</body>
     </html>
   );
