@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,7 +9,8 @@ import ffmpegPath from "ffmpeg-static";
 const AUDIO_TMP_PREFIX = "speaking-coach-audio-";
 
 export async function transcodeToAzureWav(inputBuffer: Buffer, extension = "webm") {
-  if (!ffmpegPath) {
+  const executable = resolveFfmpegPath();
+  if (!executable) {
     throw new Error("ffmpeg-static is not available.");
   }
 
@@ -21,7 +23,7 @@ export async function transcodeToAzureWav(inputBuffer: Buffer, extension = "webm
 
   try {
     await writeFile(inputPath, inputBuffer);
-    await runFfmpeg([
+    await runFfmpeg(executable, [
       "-y",
       "-i",
       inputPath,
@@ -42,7 +44,8 @@ export async function transcodeToAzureWav(inputBuffer: Buffer, extension = "webm
 }
 
 export async function transcodeToPcm16k(inputBuffer: Buffer, extension = "webm") {
-  if (!ffmpegPath) {
+  const executable = resolveFfmpegPath();
+  if (!executable) {
     throw new Error("ffmpeg-static is not available.");
   }
 
@@ -55,7 +58,7 @@ export async function transcodeToPcm16k(inputBuffer: Buffer, extension = "webm")
 
   try {
     await writeFile(inputPath, inputBuffer);
-    await runFfmpeg([
+    await runFfmpeg(executable, [
       "-y",
       "-i",
       inputPath,
@@ -75,9 +78,9 @@ export async function transcodeToPcm16k(inputBuffer: Buffer, extension = "webm")
   }
 }
 
-function runFfmpeg(args: string[]) {
+function runFfmpeg(executable: string, args: string[]) {
   return new Promise<void>((resolve, reject) => {
-    execFile(ffmpegPath as string, args, (error, _stdout, stderr) => {
+    execFile(executable, args, (error, _stdout, stderr) => {
       if (error) {
         reject(new Error(`Audio transcode failed: ${stderr || error.message}`));
         return;
@@ -85,6 +88,17 @@ function runFfmpeg(args: string[]) {
       resolve();
     });
   });
+}
+
+function resolveFfmpegPath() {
+  const candidates = [
+    path.join(process.cwd(), "node_modules", "@ffmpeg-installer", "win32-x64", "ffmpeg.exe"),
+    typeof ffmpegPath === "string" ? ffmpegPath : "",
+    path.join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg.exe"),
+    path.join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg")
+  ];
+
+  return candidates.find((candidate) => candidate && existsSync(candidate)) ?? null;
 }
 
 export function getAudioExtension(file: File) {

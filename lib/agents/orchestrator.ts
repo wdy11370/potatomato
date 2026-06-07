@@ -205,7 +205,7 @@ function resolveAgentMode(): AgentMode {
     process.env.USE_LLM_FEEDBACK === "true" ||
     process.env.USE_LLM_REPORT === "true";
 
-  if (useLlm && (process.env.OPENAI_API_KEY || process.env.OLLAMA_BASE_URL)) return "hybrid";
+  if (useLlm && (process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || process.env.OLLAMA_BASE_URL)) return "llm";
   return "demo";
 }
 

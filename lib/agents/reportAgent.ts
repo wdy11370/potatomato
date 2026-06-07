@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { reportPrompt } from "@/lib/agents/prompts/report";
 import { generateText } from "@/lib/agents/tools/textModelTool";
-import { ruleCoachTool } from "@/lib/agents/tools/ruleCoachTool";
 import type { AgentProvider } from "@/lib/agents/state";
 import type { Report, Turn } from "@/lib/mockCoach";
 
@@ -26,10 +25,8 @@ type ReportResult = {
 };
 
 export async function generateReport(turns: Turn[]): Promise<ReportResult> {
-  const ruleReport = ruleCoachTool.report(turns);
-
   if (process.env.USE_LLM_REPORT !== "true") {
-    return { report: ruleReport, provider: "rules", fallback: false };
+    throw new Error("LLM report is disabled. Set USE_LLM_REPORT=true to generate model reports.");
   }
 
   try {
@@ -41,17 +38,17 @@ export async function generateReport(turns: Turn[]): Promise<ReportResult> {
       { json: true, temperature: 0.25 }
     );
 
-    if (!result.content) return { report: ruleReport, provider: "rules", fallback: true };
+    if (!result.content) throw new Error("DeepSeek report returned empty content.");
 
     const parsed = reportSchema.safeParse(JSON.parse(result.content));
-    if (!parsed.success) return { report: ruleReport, provider: "rules", fallback: true };
+    if (!parsed.success) throw new Error("DeepSeek report JSON does not match the required schema.");
 
     return {
       report: parsed.data,
       provider: result.provider ?? "rules",
       fallback: false
     };
-  } catch {
-    return { report: ruleReport, provider: "rules", fallback: true };
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : "DeepSeek report call failed.");
   }
 }

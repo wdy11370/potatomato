@@ -1,6 +1,5 @@
 import { buildDialoguePrompt } from "@/lib/agents/prompts/dialogue";
 import { generateText } from "@/lib/agents/tools/textModelTool";
-import { ruleCoachTool } from "@/lib/agents/tools/ruleCoachTool";
 import type { AgentProvider, InputDiagnosis } from "@/lib/agents/state";
 import { getScenario, type ScenarioId } from "@/lib/scenarios";
 import type { Turn } from "@/lib/mockCoach";
@@ -17,8 +16,8 @@ export async function generateDialogueReply(input: {
   latestText: string;
   diagnosis: InputDiagnosis;
 }): Promise<DialogueResult> {
-  if (!input.diagnosis.valid || process.env.USE_LLM_CHAT !== "true") {
-    return ruleReply(input, process.env.USE_LLM_CHAT === "true");
+  if (process.env.USE_LLM_CHAT !== "true") {
+    throw new Error("LLM chat is disabled. Set USE_LLM_CHAT=true to generate model replies.");
   }
 
   const scenario = getScenario(input.scenarioId);
@@ -34,14 +33,14 @@ export async function generateDialogueReply(input: {
   let result;
   try {
     result = await generateText(messages, { temperature: 0.7 });
-  } catch {
-    return ruleReply(input, true);
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : "DeepSeek dialogue call failed.");
   }
 
   const sanitized = sanitizeReply(result.content);
 
   if (!sanitized) {
-    return ruleReply(input, true);
+    throw new Error("DeepSeek dialogue returned empty content.");
   }
 
   return {
@@ -67,21 +66,6 @@ function ensureLatestUserTurn(turns: Turn[], latestText: string): Turn[] {
       createdAt: new Date().toISOString()
     }
   ];
-}
-
-function ruleReply(
-  input: {
-    scenarioId: ScenarioId;
-    turns: Turn[];
-    latestText: string;
-  },
-  fallback: boolean
-): DialogueResult {
-  return {
-    text: ruleCoachTool.reply(input.scenarioId, input.latestText, input.turns.length),
-    provider: "rules",
-    fallback
-  };
 }
 
 function sanitizeReply(content: string | null | undefined) {

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { mockReport } from "@/lib/mockCoach";
 import { callTextModel } from "@/lib/textModel";
 
 const turnSchema = z.object({
@@ -28,10 +27,9 @@ const reportSchema = z.object({
 
 export async function POST(request: Request) {
   const body = requestSchema.parse(await request.json());
-  const ruleReport = mockReport(body.turns);
 
   if (process.env.USE_LLM_REPORT !== "true") {
-    return NextResponse.json(ruleReport);
+    return NextResponse.json({ message: "LLM report is disabled." }, { status: 503 });
   }
 
   try {
@@ -52,8 +50,8 @@ export async function POST(request: Request) {
       if (parsed.success) return NextResponse.json(parsed.data);
     }
   } catch {
-    // Fall through to deterministic demo report.
+    return NextResponse.json({ message: "DeepSeek report failed." }, { status: 502 });
   }
 
-  return NextResponse.json(ruleReport);
+  return NextResponse.json({ message: "DeepSeek returned invalid report JSON." }, { status: 502 });
 }

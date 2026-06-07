@@ -5,7 +5,8 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  outputFileTracingRoot: projectRoot
+  outputFileTracingRoot: projectRoot,
+  serverExternalPackages: ["ws"]
 };
 
 export default nextConfig;

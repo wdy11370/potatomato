@@ -10,6 +10,7 @@ import {
   Play,
   RefreshCcw,
   Send,
+  Trash2,
   Volume2
 } from "lucide-react";
 import { getScenario, scenarioIconMap, scenarios, ScenarioId } from "@/lib/scenarios";
@@ -56,6 +57,25 @@ type AgentTurnResponse = {
   trace?: TraceEvent[];
 };
 
+type SavedSession = {
+  version: 1;
+  id: string;
+  title: string;
+  savedAt: string;
+  updatedAt: string;
+  scenarioId: ScenarioId;
+  turns: Turn[];
+  feedback: Feedback | null;
+  report: Report | null;
+  pronunciationNote: string;
+  sessionId: string;
+  agentTrace: TraceEvent[];
+};
+
+const SESSION_STORAGE_KEY = "potatomato-speaking-coach-session";
+const SESSION_HISTORY_STORAGE_KEY = "potatomato-speaking-coach-history";
+const MAX_SAVED_SESSIONS = 20;
+
 declare global {
   interface Window {
     SpeechRecognition?: new () => SpeechRecognitionLike;
@@ -78,6 +98,115 @@ function createClientId() {
   return `turn-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function loadSavedSession(): SavedSession | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+
+    return normalizeSavedSession(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function loadSavedSessions(): SavedSession[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(SESSION_HISTORY_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((item) => normalizeSavedSession(item))
+      .filter((item): item is SavedSession => Boolean(item))
+      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+      .slice(0, MAX_SAVED_SESSIONS);
+  } catch {
+    return [];
+  }
+}
+
+function saveCurrentSession(input: Omit<SavedSession, "version" | "id" | "savedAt" | "updatedAt" | "title"> & { id?: string }) {
+  if (typeof window === "undefined") return;
+
+  const now = new Date().toISOString();
+  const payload: SavedSession = {
+    version: 1,
+    id: input.id || createClientId(),
+    title: buildSessionTitle(input.scenarioId, input.turns),
+    savedAt: now,
+    updatedAt: now,
+    ...input
+  };
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
+  upsertSavedSession(payload);
+  return payload;
+}
+
+function clearSavedSession() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function clearAllSavedSessions() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  window.localStorage.removeItem(SESSION_HISTORY_STORAGE_KEY);
+}
+
+function removeSavedSession(id: string) {
+  if (typeof window === "undefined") return;
+  const nextSessions = loadSavedSessions().filter((item) => item.id !== id);
+  window.localStorage.setItem(SESSION_HISTORY_STORAGE_KEY, JSON.stringify(nextSessions));
+  const current = loadSavedSession();
+  if (current?.id === id) window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function upsertSavedSession(session: SavedSession) {
+  const sessions = loadSavedSessions();
+  const nextSessions = [
+    session,
+    ...sessions.filter((item) => item.id !== session.id)
+  ].slice(0, MAX_SAVED_SESSIONS);
+  window.localStorage.setItem(SESSION_HISTORY_STORAGE_KEY, JSON.stringify(nextSessions));
+}
+
+function normalizeSavedSession(value: unknown): SavedSession | null {
+  const parsed = value as Partial<SavedSession>;
+  if (!parsed || parsed.version !== 1) return null;
+  if (!parsed.scenarioId || !scenarios.some((item) => item.id === parsed.scenarioId)) return null;
+  if (!Array.isArray(parsed.turns)) return null;
+
+  const now = new Date().toISOString();
+  const id = typeof parsed.id === "string" && parsed.id ? parsed.id : createClientId();
+  const savedAt = typeof parsed.savedAt === "string" ? parsed.savedAt : now;
+  const updatedAt = typeof parsed.updatedAt === "string" ? parsed.updatedAt : savedAt;
+
+  return {
+    version: 1,
+    id,
+    title: typeof parsed.title === "string" && parsed.title ? parsed.title : buildSessionTitle(parsed.scenarioId, parsed.turns),
+    savedAt,
+    updatedAt,
+    scenarioId: parsed.scenarioId,
+    turns: parsed.turns,
+    feedback: parsed.feedback ?? null,
+    report: parsed.report ?? null,
+    pronunciationNote: parsed.pronunciationNote ?? "",
+    sessionId: parsed.sessionId ?? "",
+    agentTrace: Array.isArray(parsed.agentTrace) ? parsed.agentTrace : []
+  };
+}
+
+function buildSessionTitle(scenarioId: ScenarioId, turns: Turn[]) {
+  const scenario = getScenario(scenarioId);
+  const firstUserText = turns.find((turn) => turn.speaker === "user")?.text.trim();
+  if (!firstUserText) return `${scenario.name} · 新练习`;
+  return `${scenario.name} · ${firstUserText.slice(0, 28)}${firstUserText.length > 28 ? "..." : ""}`;
+}
 export default function Home() {
   const [scenarioId, setScenarioId] = useState<ScenarioId>("interview");
   const scenario = useMemo(() => getScenario(scenarioId), [scenarioId]);
@@ -90,14 +219,23 @@ export default function Home() {
   const [report, setReport] = useState<Report | null>(null);
   const [reportError, setReportError] = useState("");
   const [pronunciationNote, setPronunciationNote] = useState("");
-  const [connectionMode, setConnectionMode] = useState("演示模式");
+  const [recordingNote, setRecordingNote] = useState("");
+  const [connectionMode, setConnectionMode] = useState("Demo mode");
   const [sessionId, setSessionId] = useState("");
   const [showTrace, setShowTrace] = useState(false);
   const [agentTrace, setAgentTrace] = useState<TraceEvent[]>([]);
+  const [isArchiveLoaded, setIsArchiveLoaded] = useState(false);
+  const [archiveNote, setArchiveNote] = useState("");
+  const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
+  const [activeArchiveId, setActiveArchiveId] = useState("");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const latestAudioRef = useRef<Blob | null>(null);
+  const draftRef = useRef("");
+  const pendingVoiceSubmitRef = useRef(false);
+  const skipScenarioResetRef = useRef(false);
+  const activeArchiveIdRef = useRef("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -105,26 +243,85 @@ export default function Home() {
   }, [turns]);
 
   useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    const saved = loadSavedSession();
+    skipScenarioResetRef.current = true;
+    setSavedSessions(loadSavedSessions());
+    if (saved) {
+      activeArchiveIdRef.current = saved.id;
+      setActiveArchiveId(saved.id);
+      setScenarioId(saved.scenarioId);
+      setTurns(saved.turns.length ? saved.turns : [makeTurn("ai", getScenario(saved.scenarioId).firstLine)]);
+      setFeedback(saved.feedback);
+      setReport(saved.report);
+      setPronunciationNote(saved.pronunciationNote);
+      setSessionId(saved.sessionId);
+      setAgentTrace(saved.agentTrace);
+      setArchiveNote(`Restored saved session from ${new Date(saved.savedAt).toLocaleString()}.`);
+    } else {
+      const id = createClientId();
+      activeArchiveIdRef.current = id;
+      setActiveArchiveId(id);
+      setTurns([makeTurn("ai", scenario.firstLine)]);
+      setArchiveNote("Started a new local session.");
+    }
+    setIsArchiveLoaded(true);
+    latestAudioRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!isArchiveLoaded) return;
+    if (skipScenarioResetRef.current) {
+      skipScenarioResetRef.current = false;
+      return;
+    }
     setTurns([makeTurn("ai", scenario.firstLine)]);
     setFeedback(null);
     setReport(null);
     setReportError("");
     setDraft("");
     setPronunciationNote("");
+    setRecordingNote("");
     setSessionId("");
     setAgentTrace([]);
     setShowTrace(false);
+    const id = createClientId();
+    activeArchiveIdRef.current = id;
+    setActiveArchiveId(id);
     latestAudioRef.current = null;
-  }, [scenario]);
+    setArchiveNote("Started a new scenario and saved it locally.");
+  }, [scenario, isArchiveLoaded]);
+
+  useEffect(() => {
+    if (!isArchiveLoaded) return;
+    const saved = saveCurrentSession({
+      id: activeArchiveIdRef.current || activeArchiveId,
+      scenarioId,
+      turns,
+      feedback,
+      report,
+      pronunciationNote,
+      sessionId,
+      agentTrace
+    });
+    if (saved) {
+      activeArchiveIdRef.current = saved.id;
+      if (activeArchiveId !== saved.id) setActiveArchiveId(saved.id);
+      setSavedSessions(loadSavedSessions());
+    }
+  }, [isArchiveLoaded, scenarioId, turns, feedback, report, pronunciationNote, sessionId, agentTrace, activeArchiveId]);
 
   async function probeRealtime() {
     const response = await fetch("/api/realtime/session", { method: "POST" });
     const data = await response.json();
-    setConnectionMode(data.mode === "realtime" ? "Realtime 已配置" : "演示模式");
+    setConnectionMode(data.mode === "realtime" ? "Realtime configured" : "Demo mode");
   }
 
   useEffect(() => {
-    probeRealtime().catch(() => setConnectionMode("演示模式"));
+    probeRealtime().catch(() => setConnectionMode("Demo mode"));
   }, []);
 
   function speak(text: string) {
@@ -138,33 +335,60 @@ export default function Home() {
   }
 
   async function startAudioCapture() {
-    if (!navigator.mediaDevices?.getUserMedia || !("MediaRecorder" in window)) return;
+    if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+      throw new Error("Microphone requires localhost/127.0.0.1 or HTTPS.");
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !("MediaRecorder" in window)) {
+      throw new Error("This browser does not support recording. Please use Chrome or Edge.");
+    }
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunksRef.current = [];
     latestAudioRef.current = null;
+    setRecordingNote("Recording... click Stop when you finish speaking. The answer will submit automatically.");
+
     const recorder = new MediaRecorder(stream);
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) audioChunksRef.current.push(event.data);
     };
     recorder.onstop = () => {
-      latestAudioRef.current = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+      const audio = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+      latestAudioRef.current = audio;
       stream.getTracks().forEach((track) => track.stop());
+
+      if (!audio.size) {
+        setRecordingNote("No valid audio was captured. Please check microphone permission and try again.");
+        return;
+      }
+
+      setRecordingNote("Audio saved. Sending audio and transcript to AI.");
+      if (pendingVoiceSubmitRef.current) {
+        pendingVoiceSubmitRef.current = false;
+        void submitVoiceTurn(audio);
+      }
     };
     mediaRecorderRef.current = recorder;
     recorder.start();
   }
 
   async function startListening() {
-    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!Recognition) {
-      setPronunciationNote("当前浏览器不支持 Web Speech API，请直接输入英文回答。");
+    if (isThinking || isListening) return;
+    try {
+      await startAudioCapture();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "无法录制音频，请检查麦克风权限后重试。";
+      setPronunciationNote(message);
+      setRecordingNote(message);
       return;
     }
 
-    try {
-      await startAudioCapture();
-    } catch {
-      setPronunciationNote("无法录制音频，发音评测会暂时使用文本演示评分。");
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!Recognition) {
+      pendingVoiceSubmitRef.current = true;
+      recognitionRef.current = null;
+      setIsListening(true);
+      setRecordingNote("");
+      return;
     }
 
     const recognition = new Recognition();
@@ -179,37 +403,88 @@ export default function Home() {
         if (result.isFinal) finalText += result[0].transcript;
         else interimText += result[0].transcript;
       }
-      setDraft((finalText || interimText).trim());
+      const nextText = (finalText || interimText).trim();
+      draftRef.current = nextText;
+      setDraft(nextText);
     };
-    recognition.onend = () => setIsListening(false);
+    recognition.onend = () => {
+      setIsListening(false);
+      if (mediaRecorderRef.current?.state === "recording") {
+        pendingVoiceSubmitRef.current = true;
+        mediaRecorderRef.current.stop();
+      }
+    };
     recognition.onerror = () => {
       setIsListening(false);
-      setPronunciationNote("语音识别失败，请检查麦克风权限后重试。");
+      pendingVoiceSubmitRef.current = true;
+      if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+      setPronunciationNote("");
+      setRecordingNote("");
     };
     recognitionRef.current = recognition;
+    pendingVoiceSubmitRef.current = true;
     recognition.start();
     setIsListening(true);
   }
 
   function stopListening() {
+    pendingVoiceSubmitRef.current = true;
     recognitionRef.current?.stop();
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
     setIsListening(false);
   }
 
-  async function handleSubmit(event?: FormEvent) {
-    event?.preventDefault();
-    const text = draft.trim();
+  async function submitVoiceTurn(audio: Blob) {
+    const text = await resolveVoiceTranscript(audio, draftRef.current.trim());
+    if (!text) {
+      latestAudioRef.current = audio;
+      setRecordingNote("");
+      setPronunciationNote("");
+      return;
+    }
+
+    draftRef.current = text;
+    setDraft(text);
+    await submitAgentTurn(text, audio);
+  }
+
+  async function resolveVoiceTranscript(audio: Blob, browserTranscript: string) {
+    if (browserTranscript) return browserTranscript;
+
+    setRecordingNote("");
+    try {
+      const form = new FormData();
+      form.append("audio", audio, "answer.webm");
+      form.append("language", "en_us");
+
+      const response = await fetch("/api/asr", { method: "POST", body: form });
+      const data = (await response.json()) as { transcript?: string; message?: string };
+      const transcript = data.transcript?.trim() ?? "";
+      if (transcript) {
+        setRecordingNote("");
+        return transcript;
+      }
+
+      setPronunciationNote("");
+      return "";
+    } catch {
+      setPronunciationNote("");
+      return "";
+    }
+  }
+  async function submitAgentTurn(text: string, audio?: Blob) {
     if (!text || isThinking) return;
 
     const userTurn = makeTurn("user", text);
     const nextTurns = [...turns, userTurn];
     setTurns(nextTurns);
     setDraft("");
+    draftRef.current = "";
     setFeedback(null);
     setReportError("");
     setIsThinking(true);
     setAgentTrace([]);
+    setRecordingNote("");
 
     try {
       const form = new FormData();
@@ -218,7 +493,7 @@ export default function Home() {
       form.append("turns", JSON.stringify(nextTurns));
       form.append("text", text);
       form.append("includeTrace", "true");
-      if (latestAudioRef.current) form.append("audio", latestAudioRef.current, "answer.webm");
+      if (audio) form.append("audio", audio, "answer.webm");
       latestAudioRef.current = null;
 
       const response = await fetch("/api/agent/turn", { method: "POST", body: form });
@@ -231,22 +506,21 @@ export default function Home() {
       setAgentTrace(data.trace ?? []);
       setTurns(data.updatedTurns ?? [...nextTurns, data.aiTurn]);
       setIsThinking(false);
+      setRecordingNote("");
       speak(data.aiTurn.text);
-      return;
     } catch {
-      setFeedback({
-        corrected: text,
-        issue: "Agent feedback is temporarily unavailable.",
-        better: "Please try again later or continue the conversation.",
-        pronunciationHint: "Pronunciation assessment can be retried later."
-      });
-      setPronunciationNote("Agent API is temporarily unavailable. Please try again.");
+      setFeedback(null);
+      setPronunciationNote("");
+      setRecordingNote("");
       setIsThinking(false);
-      return;
     }
-
   }
-
+  async function handleSubmit(event?: FormEvent) {
+    event?.preventDefault();
+    const text = draft.trim();
+    if (!text || isThinking) return;
+    await submitAgentTurn(text, latestAudioRef.current ?? undefined);
+  }
   async function finishSession() {
     if (isReporting) return;
 
@@ -272,16 +546,77 @@ export default function Home() {
   }
 
   function resetSession() {
+    const id = createClientId();
+    activeArchiveIdRef.current = id;
+    setActiveArchiveId(id);
     setTurns([makeTurn("ai", scenario.firstLine)]);
     setFeedback(null);
     setReport(null);
     setReportError("");
     setDraft("");
     setPronunciationNote("");
+    setRecordingNote("");
     setSessionId("");
     setAgentTrace([]);
     setShowTrace(false);
     latestAudioRef.current = null;
+    setArchiveNote("Session restarted and saved locally.");
+  }
+
+  function deleteArchive() {
+    clearAllSavedSessions();
+    const id = createClientId();
+    activeArchiveIdRef.current = id;
+    setActiveArchiveId(id);
+    setSavedSessions([]);
+    setTurns([makeTurn("ai", scenario.firstLine)]);
+    setFeedback(null);
+    setReport(null);
+    setReportError("");
+    setDraft("");
+    setPronunciationNote("");
+    setRecordingNote("");
+    setSessionId("");
+    setAgentTrace([]);
+    setShowTrace(false);
+    latestAudioRef.current = null;
+    setArchiveNote("All local archives cleared. A fresh session is now active.");
+  }
+
+  function loadArchive(session: SavedSession) {
+    skipScenarioResetRef.current = true;
+    activeArchiveIdRef.current = session.id;
+    setActiveArchiveId(session.id);
+    setScenarioId(session.scenarioId);
+    setTurns(session.turns.length ? session.turns : [makeTurn("ai", getScenario(session.scenarioId).firstLine)]);
+    setFeedback(session.feedback);
+    setReport(session.report);
+    setReportError("");
+    setDraft("");
+    setPronunciationNote(session.pronunciationNote);
+    setRecordingNote("");
+    setSessionId(session.sessionId);
+    setAgentTrace(session.agentTrace);
+    setShowTrace(false);
+    latestAudioRef.current = null;
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+    setArchiveNote(`Loaded archive: ${session.title}`);
+  }
+
+  function deleteOneArchive(id: string) {
+    removeSavedSession(id);
+    const nextSessions = loadSavedSessions();
+    setSavedSessions(nextSessions);
+    if (activeArchiveId === id) {
+      const next = nextSessions[0];
+      if (next) {
+        loadArchive(next);
+      } else {
+        resetSession();
+      }
+    } else {
+      setArchiveNote("Archive deleted.");
+    }
   }
 
   return (
@@ -329,13 +664,28 @@ export default function Home() {
             </div>
 
             <div className="report">
-              <div className="feedback-label">本轮达标点</div>
+              <div className="feedback-label">历史存档</div>
               <div className="feedback-list">
-                {scenario.successCriteria.map((criterion) => (
-                  <div className="small-note" key={criterion}>
-                    {criterion}
-                  </div>
-                ))}
+                {savedSessions.length ? (
+                  savedSessions.map((session) => (
+                    <div className="feedback-item" key={session.id}>
+                      <div className="feedback-label">{session.title}</div>
+                      <p className="small-note">
+                        {getScenario(session.scenarioId).name} · {session.turns.filter((turn) => turn.speaker === "user").length} 轮 · {new Date(session.updatedAt).toLocaleString()}
+                      </p>
+                      <div className="controls">
+                        <button className="secondary-button" onClick={() => loadArchive(session)} type="button">
+                          加载
+                        </button>
+                        <button className="secondary-button" onClick={() => deleteOneArchive(session.id)} type="button">
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="small-note">暂无历史记录。开始练习后会自动保存。</div>
+                )}
               </div>
             </div>
           </div>
@@ -358,7 +708,12 @@ export default function Home() {
                 <RefreshCcw size={17} />
                 重开
               </button>
+              <button className="secondary-button" onClick={deleteArchive} type="button">
+                <Trash2 size={17} />
+                清除存档
+              </button>
             </div>
+            {archiveNote ? <p className="small-note">{archiveNote}</p> : null}
           </div>
 
           <div className="chat-log">
@@ -380,15 +735,12 @@ export default function Home() {
           </div>
 
           <form className="composer" onSubmit={handleSubmit}>
-            <div className="small-note">
-              用麦克风说英文，或直接输入英文回答。首次使用语音时浏览器会请求麦克风权限。
-            </div>
             <div className="input-row">
               <input
                 className="text-input"
                 value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="Speak or type your English response..."
+                readOnly
+                placeholder="录音后这里会显示自动转写文本..."
               />
               <button
                 className="icon-button"
@@ -401,7 +753,7 @@ export default function Home() {
               </button>
               <button className="primary-button" disabled={!draft.trim() || isThinking} type="submit">
                 {isThinking ? <Loader2 size={18} /> : <Send size={18} />}
-                发送
+                发送转写
               </button>
             </div>
           </form>
@@ -410,7 +762,7 @@ export default function Home() {
         <aside className="panel right-panel">
           <div className="panel-header">
             <h2 className="panel-title">反馈与报告</h2>
-            <p className="panel-subtitle">对话中轻纠错，课后集中给训练建议。</p>
+            <p className="panel-subtitle">对话中轻量纠错，课后集中给训练建议。</p>
           </div>
           <div className="panel-body">
             <div className="feedback-list">
@@ -425,11 +777,6 @@ export default function Home() {
                 ) : (
                   <div className="small-note">发送第一句话后显示建议。</div>
                 )}
-              </div>
-
-              <div className="feedback-item">
-                <div className="feedback-label">发音评测接口</div>
-                <div className="small-note">{pronunciationNote || "等待用户回答。配置 Azure 后可输出音素级评分。"}</div>
               </div>
               <div className="feedback-item trace-card">
                 <button className="trace-toggle" onClick={() => setShowTrace((current) => !current)} type="button">
@@ -488,7 +835,6 @@ export default function Home() {
     </main>
   );
 }
-
 function Score({ label, value }: { label: string; value: number }) {
   return (
     <div className="score-card">
@@ -513,3 +859,4 @@ function ReportBlock({ title, items }: { title: string; items: string[] }) {
     </div>
   );
 }
+

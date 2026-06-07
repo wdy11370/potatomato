@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSystemPrompt, diagnoseInput, mockReply, Turn } from "@/lib/mockCoach";
-import { getScenario, ScenarioId } from "@/lib/scenarios";
+import { createSystemPrompt, Turn } from "@/lib/mockCoach";
+import { getScenario } from "@/lib/scenarios";
 import { callTextModel } from "@/lib/textModel";
 
 const requestSchema = z.object({
@@ -19,14 +19,9 @@ const requestSchema = z.object({
 export async function POST(request: Request) {
   const body = requestSchema.parse(await request.json());
   const scenario = getScenario(body.scenarioId);
-  const latestUser = [...body.turns].reverse().find((turn) => turn.speaker === "user");
-  const latestText = latestUser?.text ?? "";
-  const diagnosis = diagnoseInput(latestText);
 
-  if (!diagnosis.valid || process.env.USE_LLM_CHAT !== "true") {
-    return NextResponse.json({
-      text: mockReply(body.scenarioId as ScenarioId, latestText, body.turns.length)
-    });
+  if (process.env.USE_LLM_CHAT !== "true") {
+    return NextResponse.json({ message: "LLM chat is disabled." }, { status: 503 });
   }
 
   const messages = [
@@ -38,9 +33,9 @@ export async function POST(request: Request) {
   ];
 
   const content = await callTextModel(messages, { temperature: 0.7 });
-  return NextResponse.json({
-    text: sanitizeReply(content) ?? mockReply(body.scenarioId as ScenarioId, latestText, body.turns.length)
-  });
+  const text = sanitizeReply(content);
+  if (!text) return NextResponse.json({ message: "DeepSeek returned empty content." }, { status: 502 });
+  return NextResponse.json({ text });
 }
 
 function sanitizeReply(content: string | null | undefined) {

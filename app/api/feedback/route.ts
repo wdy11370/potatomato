@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { mockFeedback } from "@/lib/mockCoach";
 import { callTextModel } from "@/lib/textModel";
 
 const requestSchema = z.object({
@@ -16,10 +15,9 @@ const feedbackSchema = z.object({
 
 export async function POST(request: Request) {
   const body = requestSchema.parse(await request.json());
-  const ruleFeedback = mockFeedback(body.text);
 
   if (process.env.USE_LLM_FEEDBACK !== "true") {
-    return NextResponse.json(ruleFeedback);
+    return NextResponse.json({ message: "LLM feedback is disabled." }, { status: 503 });
   }
 
   try {
@@ -37,10 +35,10 @@ export async function POST(request: Request) {
 
     if (content) return NextResponse.json(normalizeFeedback(JSON.parse(content), body.text));
   } catch {
-    // Fall through to deterministic demo feedback.
+    return NextResponse.json({ message: "DeepSeek feedback failed." }, { status: 502 });
   }
 
-  return NextResponse.json(ruleFeedback);
+  return NextResponse.json({ message: "DeepSeek returned empty feedback." }, { status: 502 });
 }
 
 function normalizeFeedback(value: unknown, originalText: string) {
@@ -48,14 +46,13 @@ function normalizeFeedback(value: unknown, originalText: string) {
   if (parsed.success) return parsed.data;
 
   const record = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
-  const fallback = mockFeedback(originalText);
 
   return {
-    corrected: stringValue(record.corrected) ?? stringValue(record.correctedSentence) ?? fallback.corrected,
-    issue: stringValue(record.issue) ?? stringValue(record.explanationChinese) ?? stringValue(record.explanation) ?? fallback.issue,
-    better: stringValue(record.better) ?? stringValue(record.betterExpression) ?? stringValue(record.suggestion) ?? fallback.better,
+    corrected: stringValue(record.corrected) ?? stringValue(record.correctedSentence) ?? originalText,
+    issue: stringValue(record.issue) ?? stringValue(record.explanationChinese) ?? stringValue(record.explanation) ?? "DeepSeek did not provide a specific issue.",
+    better: stringValue(record.better) ?? stringValue(record.betterExpression) ?? stringValue(record.suggestion) ?? "DeepSeek did not provide an improved expression.",
     pronunciationHint:
-      stringValue(record.pronunciationHint) ?? stringValue(record.pronunciation) ?? fallback.pronunciationHint
+      stringValue(record.pronunciationHint) ?? stringValue(record.pronunciation) ?? "DeepSeek did not provide a pronunciation hint."
   };
 }
 

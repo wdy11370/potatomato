@@ -29,16 +29,19 @@ export async function callTextModelWithProvider(
   if (provider === "deepseek") {
     const deepSeekResult = await callDeepSeekText(messages, options).catch(() => null);
     if (deepSeekResult) return { content: deepSeekResult, provider: "deepseek" };
+    return null;
   }
 
   if (provider === "ollama") {
     const ollamaResult = await callOllamaText(messages, options).catch(() => null);
     if (ollamaResult) return { content: ollamaResult, provider: "ollama" };
+    return null;
   }
 
   if (provider === "openai") {
     const openAIResult = await callOpenAIText(messages, options).catch(() => null);
     if (openAIResult) return { content: openAIResult, provider: "openai" };
+    return null;
   }
 
   const deepSeekResult = await callDeepSeekText(messages, options).catch(() => null);
