@@ -82,26 +82,6 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-如果 3000 端口被占用，可以指定端口：
-
-```powershell
-npm run dev -- -p 3004
-```
-
-打开：
-
-```text
-http://127.0.0.1:3004/
-```
-
-局域网其他设备访问时，用终端里显示的 Network 地址，例如：
-
-```text
-http://10.201.94.116:3004/
-```
-
-注意：非本机设备通过 HTTP 访问时，部分浏览器可能禁止麦克风权限。正式演示建议使用本机 `127.0.0.1`，或部署到 HTTPS 环境。
-
 ## 环境变量
 
 `.env.local` 用来保存真实 API Key，不要提交到 GitHub。仓库只提交 `.env.example` 模板。
@@ -133,8 +113,8 @@ OPENAI_API_KEY=
 OPENAI_REALTIME_MODEL=gpt-4o-realtime-preview-2024-12-17
 OPENAI_TEXT_MODEL=gpt-4o-mini
 
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_BASE_URL=
+OLLAMA_MODEL=
 
 AZURE_SPEECH_KEY=
 AZURE_SPEECH_REGION=
