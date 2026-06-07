@@ -64,11 +64,19 @@ declare global {
 }
 
 const makeTurn = (speaker: Turn["speaker"], text: string): Turn => ({
-  id: crypto.randomUUID(),
+  id: createClientId(),
   speaker,
   text,
   createdAt: new Date().toISOString()
 });
+
+function createClientId() {
+  if (globalThis.crypto && "randomUUID" in globalThis.crypto) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `turn-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export default function Home() {
   const [scenarioId, setScenarioId] = useState<ScenarioId>("interview");
