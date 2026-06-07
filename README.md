@@ -61,7 +61,7 @@ public/
 先进入项目目录：
 
 ```powershell
-cd C:\Users\admin\Desktop\临床数据agent\branch1\potatomato
+cd YOUR_DIR
 ```
 
 安装依赖：
