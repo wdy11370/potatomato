@@ -8,13 +8,13 @@ Potatomato Speaking Coach 是一个可本地部署的 AI 英语口语练习网�
 
 - 场景化口语训练：英文面试、餐厅点餐、商务会议等。
 - 语音输入：浏览器录音，服务端接收音频。
-- 自动转写：优先使用浏览器语音识别，失败时调用讯飞 ASR。
-- AI 对话：保留每个场景的第一句开场，后续回复由 DeepSeek 生成。
+- 自动转写：调用讯飞 ASR。
+- AI 对话：回复由 DeepSeek 生成。
 - 即时反馈：对用户每轮英文回答进行语法、表达、场景适配度分析。
-- 发音评测：支持讯飞语音评测接口，也保留 Azure Speech 接口。
-- 课后报告：根据真实对话记录生成总结，不使用预设假报告。
-- 多条存档：浏览器本地保存多条练习记录，刷新页面后仍可查看。
-- 本地部署：API Key 写入 `.env.local`，不会上传到 GitHub。
+- 发音评测：支持讯飞语音评测接口。
+- 课后报告：根据真实对话记录生成总结。
+- 多条存档：浏览器本地保存多条练习记录。
+- 
 
 ## 技术栈
 
@@ -53,7 +53,7 @@ lib/
   scenarios.ts        训练场景配置
 
 public/
-  potatomato-icon.png 品牌图标
+  potatomato-icon.png 图标
 ```
 
 ## 快速运行
@@ -84,7 +84,7 @@ npm run dev
 
 ## 环境变量
 
-`.env.local` 用来保存真实 API Key，不要提交到 GitHub。仓库只提交 `.env.example` 模板。
+`.env.local` 
 
 推荐配置：
 
@@ -177,7 +177,7 @@ DeepSeek：
 开发：
 
 ```powershell
-npm run dev -- -p 3004
+npm run dev
 ```
 
 构建检查：
@@ -199,13 +199,6 @@ npm run start
 git status --short
 ```
 
-检查是否误提交密钥：
-
-```powershell
-git diff --cached --name-only
-```
-
-确认输出里没有 `.env.local`。如果 `.env.local` 出现在暂存区，请先取消暂存，不要提交。
 
 ## 上传 GitHub
 
@@ -227,24 +220,6 @@ git add .
 git commit -m "Update speaking coach app"
 ```
 
-当前本地分支如果叫 `1`，推送到 GitHub 的 `1` 分支：
-
-```powershell
-git push -u origin 1
-```
-
-如果要把本地 `1` 分支推到 GitHub 的 `main` 分支：
-
-```powershell
-git push origin 1:main
-```
-
-## 安全说明
-
-- `.env.local` 已被 `.gitignore` 忽略。
-- 不要把真实 API Key 写进代码、README 或 `.env.example`。
-- GitHub 上只保留环境变量模板。
-- 如果曾经误提交过密钥，请立即到对应平台删除旧 Key 并重新生成。
 
 ## 当前模型配置建议
 
@@ -257,4 +232,3 @@ git push origin 1:main
 录音与页面交互：浏览器 MediaRecorder
 ```
 
-这样可以替代原来的 OpenAI Realtime 和 Azure Speech 方案，成本更低，也更适合国内网络环境和本地部署演示。
